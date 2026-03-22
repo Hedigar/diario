@@ -53,12 +53,13 @@ switch ($action) {
 
     case 'set_next':
         $id = $_GET['id'] ?? '';
-        $stmt = $pdo->prepare("SELECT turma, ordem FROM aulas_planejadas WHERE id = ? AND usuario_id = ?");
+        $stmt = $pdo->prepare("SELECT turma, disciplina, ordem FROM aulas_planejadas WHERE id = ? AND usuario_id = ?");
         $stmt->execute([$id, $user_id]);
         $aula = $stmt->fetch();
         if ($aula) {
-            $stmt = $pdo->prepare("UPDATE aulas_planejadas SET data_uso = NULL WHERE usuario_id = ? AND turma = ? AND ordem >= ?");
-            $stmt->execute([$user_id, $aula['turma'], $aula['ordem']]);
+            // CORREÇÃO: Reseta data_uso apenas da mesma TURMA e DISCIPLINA
+            $stmt = $pdo->prepare("UPDATE aulas_planejadas SET data_uso = NULL WHERE usuario_id = ? AND turma = ? AND disciplina = ? AND ordem >= ?");
+            $stmt->execute([$user_id, $aula['turma'], $aula['disciplina'], $aula['ordem']]);
         }
         echo json_encode(['success' => true]);
         break;

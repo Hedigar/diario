@@ -54,8 +54,8 @@ CREATE TABLE IF NOT EXISTS aulas_planejadas (
     conteudo TEXT NOT NULL,
     data_uso DATE DEFAULT NULL,
     FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
-    UNIQUE KEY (usuario_id, turma, ordem),
-    UNIQUE KEY (usuario_id, turma, data_uso)
+    UNIQUE KEY (usuario_id, turma, disciplina, ordem),
+    UNIQUE KEY (usuario_id, turma, disciplina, data_uso)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- Insere dados iniciais para o admin começar testando
