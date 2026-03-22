@@ -39,8 +39,9 @@ switch ($action) {
         $data = json_decode(file_get_contents('php://input'), true);
         $turmas = is_array($data['turmas']) ? $data['turmas'] : [$data['turma']];
         foreach ($turmas as $t) {
-            $stmt = $pdo->prepare("SELECT MAX(ordem) as max_ordem FROM aulas_planejadas WHERE usuario_id = ? AND turma = ?");
-            $stmt->execute([$user_id, $t]);
+            // CORREÇÃO: Pega a última ordem FILTRANDO por TURMA e DISCIPLINA
+            $stmt = $pdo->prepare("SELECT MAX(ordem) as max_ordem FROM aulas_planejadas WHERE usuario_id = ? AND turma = ? AND disciplina = ?");
+            $stmt->execute([$user_id, $t, $data['disciplina']]);
             $res = $stmt->fetch();
             $nova_ordem = ($res['max_ordem'] ?? 0) + 1;
 

@@ -97,24 +97,33 @@
     }
 
     function extrairDisciplina() {
-        // Tenta encontrar o texto da disciplina no cabeçalho
-        // Geralmente aparece como "Componente Curricular: Matemática" ou algo similar
         const cab = document.querySelector('app-cabecalho-informacoes-turma');
-        if (cab) {
-            const texto = cab.innerText;
-            // Busca por padrões comuns. Exemplo: "Matemática", "Português", etc.
-            // Se houver um rótulo "Componente Curricular:", pegamos o que vem depois.
-            const matchComp = texto.match(/Componente Curricular:\s*([^-\n]+)/i);
-            if (matchComp) return matchComp[1].trim();
+        if (!cab) return null;
 
-            // Alternativa: Se não houver rótulo, tenta pegar a primeira linha de texto que não seja a turma
-            const linhas = texto.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-            for (let linha of linhas) {
-                if (!linha.match(/\b\d{3}\b/) && linha.length > 3) {
-                    return linha;
-                }
-            }
+        // 1. Tenta encontrar especificamente o span ou div que contém o nome da disciplina
+        // Olhando o HTML do Ionic, geralmente o texto está dentro de um elemento próximo ao ícone
+        const iconBook = cab.querySelector('ion-icon[name="book"]');
+        if (iconBook) {
+            // Pegamos o texto do elemento pai, mas de forma mais cuidadosa
+            let container = iconBook.closest('ion-item') || iconBook.parentElement;
+            let texto = container.innerText.trim();
+            
+            // Remove o número da turma (ex: 101, 202)
+            // Usamos uma regex que busca especificamente 3 dígitos isolados
+            texto = texto.replace(/\b\d{3}\b/g, '');
+            
+            // Remove traços, pontos e espaços extras que sobram
+            texto = texto.replace(/^[-\u2013\u2014\s\.]+|[-\u2013\u2014\s\.]+$|[:]/g, '').trim();
+            
+            console.log("Disciplina detectada via ícone:", texto);
+            return texto;
         }
+
+        // 2. Fallback: Se não achou pelo ícone, busca por palavras-chave comuns
+        const textoTodo = cab.innerText;
+        const matchComp = textoTodo.match(/(?:Componente Curricular|Disciplina):\s*([^-\n\r]+)/i);
+        if (matchComp) return matchComp[1].trim();
+
         return null;
     }
 
