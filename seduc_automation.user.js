@@ -89,10 +89,24 @@
 
     function extrairTurma() {
         const cab = document.querySelector('app-cabecalho-informacoes-turma');
-        if (cab) {
-            const m = cab.innerText.match(/\b\d{3}\b/);
-            return m ? m[0] : null;
+        if (!cab) return null;
+
+        // 1. Tenta encontrar pelo padrão clássico de 3 dígitos (ex: 101)
+        const matchDigitos = cab.innerText.match(/\b\d{3}\b/);
+        if (matchDigitos) return matchDigitos[0];
+
+        // 2. Se não achou dígitos, busca o texto após o traço final (ex: "Etapa 2")
+        // O HTML enviado mostra: "Disciplina - Etapa 2"
+        const partes = cab.innerText.split(' - ');
+        if (partes.length > 1) {
+            const possivelTurma = partes[partes.length - 1].trim();
+            // Se o final for algo como "Etapa 2", pegamos ele todo
+            if (possivelTurma.length > 0) {
+                console.log("Turma detectada via sufixo:", possivelTurma);
+                return possivelTurma;
+            }
         }
+
         return null;
     }
 
@@ -100,29 +114,29 @@
         const cab = document.querySelector('app-cabecalho-informacoes-turma');
         if (!cab) return null;
 
-        // 1. Tenta encontrar especificamente o span ou div que contém o nome da disciplina
-        // Olhando o HTML do Ionic, geralmente o texto está dentro de um elemento próximo ao ícone
         const iconBook = cab.querySelector('ion-icon[name="book"]');
         if (iconBook) {
-            // Pegamos o texto do elemento pai, mas de forma mais cuidadosa
-            let container = iconBook.closest('ion-item') || iconBook.parentElement;
+            let container = iconBook.closest('ion-col') || iconBook.parentElement;
             let texto = container.innerText.trim();
             
-            // Remove o número da turma (ex: 101, 202)
-            // Usamos uma regex que busca especificamente 3 dígitos isolados
-            texto = texto.replace(/\b\d{3}\b/g, '');
+            // Lógica Inteligente: A disciplina é o que vem ANTES do " - Etapa X" ou da Turma
+            // Exemplo: "Cult Dig, com e Multet Mund - Etapa 2"
+            const partes = texto.split(' - ');
+            if (partes.length > 1) {
+                // Remove a última parte (que é a turma) e junta o resto
+                partes.pop(); 
+                texto = partes.join(' - ').trim();
+            } else {
+                // Fallback: remove apenas dígitos isolados se não houver o traço
+                texto = texto.replace(/\b\d{3}\b/g, '').trim();
+            }
             
-            // Remove traços, pontos e espaços extras que sobram
+            // Remove caracteres de pontuação do início/fim
             texto = texto.replace(/^[-\u2013\u2014\s\.]+|[-\u2013\u2014\s\.]+$|[:]/g, '').trim();
             
-            console.log("Disciplina detectada via ícone:", texto);
+            console.log("Disciplina detectada:", texto);
             return texto;
         }
-
-        // 2. Fallback: Se não achou pelo ícone, busca por palavras-chave comuns
-        const textoTodo = cab.innerText;
-        const matchComp = textoTodo.match(/(?:Componente Curricular|Disciplina):\s*([^-\n\r]+)/i);
-        if (matchComp) return matchComp[1].trim();
 
         return null;
     }
