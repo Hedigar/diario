@@ -1,0 +1,17 @@
+# Docker
+.docker/
+docker-compose.override.yml
+
+# PHP
+/backend/api/config.php
+/backend/api/db.php
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VS Code / IDE
+.vscode/
+.idea/
+*.swp
+*.log
