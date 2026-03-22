@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name         Automacao SEDUC - MULTI USUARIO
-// @version      3.0
-// @description  Automação com suporte a múltiplos professores via Token
+// @version      3.3
+// @description  Automação com suporte a múltiplos professores e disciplinas
 // @author       Assistant & Hedigar
 // @match        https://professor.escola.rs.gov.br/*
 // @grant        GM_xmlhttpRequest
-// @connect      localhost
+// @connect      api-seduc.myrandainformatica.com.br
 // @run-at       document-start
 // ==/UserScript==
 
@@ -16,10 +16,9 @@
     // CONFIGURAÇÃO DO PROFESSOR
     // Pegue seu token na aba "Script Token" do painel admin
     const PROFESSOR_TOKEN = 'token_mestre_123'; 
-    const API_PORT = '8088'; 
     // ==========================================
 
-    const API_BASE_URL = `http://localhost:${API_PORT}/registro.php`;
+    const API_BASE_URL = `https://api-seduc.myrandainformatica.com.br/registro.php`;
 
     function criarBotao() {
         if (document.getElementById('btn-automacao-fixo')) return;
@@ -40,17 +39,18 @@
         btn.onclick = function() {
             const data = extrairData();
             const turma = extrairTurma();
+            const disciplina = extrairDisciplina();
 
-            if (!data || !turma) {
-                alert(`Erro: Data (${data}) ou Turma (${turma}) não encontrada.`);
+            if (!data || !turma || !disciplina) {
+                alert(`Erro ao identificar dados:\nData: ${data || '?'}\nTurma: ${turma || '?'}\nDisciplina: ${disciplina || '?'}`);
                 return;
             }
 
             this.innerHTML = '⌛ BUSCANDO...';
-            
+
             GM_xmlhttpRequest({
                 method: "GET",
-                url: `${API_BASE_URL}?data=${data}&turma=${turma}&token=${PROFESSOR_TOKEN}`,
+                url: `${API_BASE_URL}?data=${data}&turma=${turma}&disciplina=${encodeURIComponent(disciplina)}&token=${PROFESSOR_TOKEN}`,
                 onload: (res) => {
                     try {
                         const json = JSON.parse(res.responseText);
@@ -92,6 +92,28 @@
         if (cab) {
             const m = cab.innerText.match(/\b\d{3}\b/);
             return m ? m[0] : null;
+        }
+        return null;
+    }
+
+    function extrairDisciplina() {
+        // Tenta encontrar o texto da disciplina no cabeçalho
+        // Geralmente aparece como "Componente Curricular: Matemática" ou algo similar
+        const cab = document.querySelector('app-cabecalho-informacoes-turma');
+        if (cab) {
+            const texto = cab.innerText;
+            // Busca por padrões comuns. Exemplo: "Matemática", "Português", etc.
+            // Se houver um rótulo "Componente Curricular:", pegamos o que vem depois.
+            const matchComp = texto.match(/Componente Curricular:\s*([^-\n]+)/i);
+            if (matchComp) return matchComp[1].trim();
+
+            // Alternativa: Se não houver rótulo, tenta pegar a primeira linha de texto que não seja a turma
+            const linhas = texto.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+            for (let linha of linhas) {
+                if (!linha.match(/\b\d{3}\b/) && linha.length > 3) {
+                    return linha;
+                }
+            }
         }
         return null;
     }
