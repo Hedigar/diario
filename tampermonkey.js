@@ -12,7 +12,7 @@
 (function() {
     'use strict';
 
-    const PROFESSOR_TOKEN = 'token_mestre_123'; 
+    const PROFESSOR_TOKEN = 'token_mestre_123';
     const API_BASE_URL = `https://api-seduc.myrandainformatica.com.br/registro.php`;
 
     function criarBotao() {
@@ -66,10 +66,10 @@
                     }
                     alert("Erro API: " + (json.error || "Sem conteúdo"));
                     this.innerHTML = '🚀 CARREGAR DADOS';
-                } catch(e) { 
+                } catch(e) {
                     console.error("Erro na resposta:", res.responseText);
-                    alert("Erro na resposta da API."); 
-                    this.innerHTML = '🚀 CARREGAR DADOS'; 
+                    alert("Erro na resposta da API.");
+                    this.innerHTML = '🚀 CARREGAR DADOS';
                 }
             }
         });
@@ -94,10 +94,10 @@
         if (iconBook) {
             // No Ionic, o texto da disciplina geralmente está no mesmo nível ou no pai do ícone
             let container = iconBook.closest('ion-col') || iconBook.parentElement;
-            
+
             // Pegamos apenas o texto direto desse container, tentando ignorar sub-elementos se houver
-            let texto = container.innerText.split('\n')[0].trim(); 
-            
+            let texto = container.innerText.split('\n')[0].trim();
+
             // Remove a turma (Etapa X ou 101) do nome da disciplina se ela estiver grudada
             const turmaCapturada = extrairTurma();
             if (turmaCapturada) {

@@ -47,7 +47,9 @@ $is_admin = ($_SESSION['user_role'] === 'admin');
 <div class="container">
     <ul class="nav nav-tabs mb-4" id="adminTabs" role="tablist">
         <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#aulas">📚 Minhas Aulas</a></li>
+        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#importacao">📥 Importação em Massa</a></li>
         <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#config">⚙️ Turmas e Disciplinas</a></li>
+        <li class="nav-item"><a class="nav-link" href="wizard.php">🪄 Planejamento Mestre</a></li>
         <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#token">🔑 Script Token</a></li>
         <?php if ($is_admin): ?>
         <li class="nav-item"><a class="nav-link text-primary" data-bs-toggle="tab" href="#usuarios">👥 Gerenciar Professores</a></li>
@@ -88,6 +90,45 @@ $is_admin = ($_SESSION['user_role'] === 'admin');
                         </select>
                     </div>
                     <div id="listaAulas"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ABA DE IMPORTAÇÃO EM MASSA -->
+        <div class="tab-pane fade" id="importacao">
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h5 class="card-title mb-4">Importar Aulas em Massa</h5>
+                            <form id="formImportacao">
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold">Disciplina</label>
+                                    <select id="importDisciplina" class="form-select" required></select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold">Turmas (selecione múltiplas)</label>
+                                    <select id="importTurmas" class="form-select" multiple required style="min-height: 150px;"></select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold">Cole a lista de aulas (texto livre)</label>
+                                    <textarea id="importTexto" class="form-control" rows="10" required placeholder="Exemplo:
+1. Introdução à Matemática - Habilidade: BM1.1
+2. Números Inteiros - Habilidade: BM1.2
+3. Operações Básicas - Habilidade: BM1.3"></textarea>
+                                </div>
+                                <button type="submit" id="btnProcessar" class="btn btn-primary w-100">Processar e Extrair Aulas</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title mb-4">Resumo da Importação</h5>
+                            <div id="importResumo"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -278,6 +319,116 @@ $is_admin = ($_SESSION['user_role'] === 'admin');
     async function delProf(id) { if (confirm('Excluir professor?')) { await fetch(`${API}?action=del_prof&id=${id}`); loadProfs(); } }
     async function logout() { await fetch('api/auth.php?action=logout'); window.location.href = 'login.php'; }
     async function resetAll() { if (confirm('Resetar todas as sequências?')) { await fetch(`${API}?action=reset_all`); loadData(); } }
+
+    // Importação em massa
+    let extractedLessons = null;
+
+    function renderImportForm() {
+        document.getElementById('importDisciplina').innerHTML = state.disciplinas.map(d => `<option value="${d}">${d}</option>`).join('');
+        document.getElementById('importTurmas').innerHTML = state.turmas.map(t => `<option value="${t}">Turma ${t}</option>`).join('');
+    }
+
+    document.getElementById('formImportacao').onsubmit = async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('btnProcessar');
+        const resumoDiv = document.getElementById('importResumo');
+        
+        btn.disabled = true;
+        btn.innerHTML = '⌛ Processando...';
+        resumoDiv.innerHTML = '<div class="text-center text-muted">Extraindo aulas...</div>';
+
+        try {
+            const turmas = Array.from(document.getElementById('importTurmas').selectedOptions).map(o => o.value);
+            const disciplina = document.getElementById('importDisciplina').value;
+            const texto = document.getElementById('importTexto').value;
+
+            const res = await fetch(`${API}?action=extract_lessons`, {
+                method: 'POST',
+                body: JSON.stringify({ turmas, disciplina, texto }),
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            const data = await res.json();
+            
+            if (data.error) {
+                resumoDiv.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                return;
+            }
+
+            extractedLessons = data;
+            renderResumoImportacao(data);
+        } catch (err) {
+            resumoDiv.innerHTML = `<div class="alert alert-danger">Erro: ${err.message}</div>`;
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = 'Processar e Extrair Aulas';
+        }
+    };
+
+    function renderResumoImportacao(data) {
+        const resumoDiv = document.getElementById('importResumo');
+        let html = `
+            <div class="mb-3">
+                <span class="badge bg-primary">${data.aulas.length} aulas extraídas</span>
+                <span class="badge bg-secondary ms-2">${data.turmas.length} turmas selecionadas</span>
+            </div>
+            <table class="table table-sm small mb-3">
+                <thead><tr><th>#</th><th>Título</th><th>Habilidades</th></tr></thead>
+                <tbody>
+                    ${data.aulas.map(a => `
+                        <tr>
+                            <td>${a.numero}</td>
+                            <td>${a.titulo}</td>
+                            <td class="text-muted">${a.habilidades || '-'}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+            <div class="alert alert-info small mb-3">
+                <strong>Serão inseridas:</strong> ${data.aulas.length} aulas × ${data.turmas.length} turmas = ${data.aulas.length * data.turmas.length} registros no total
+            </div>
+            <button id="btnConfirmar" class="btn btn-success w-100" onclick="confirmarImportacao()">✅ Confirmar e Salvar</button>
+        `;
+        resumoDiv.innerHTML = html;
+    }
+
+    async function confirmarImportacao() {
+        if (!extractedLessons) return;
+        
+        const btn = document.getElementById('btnConfirmar');
+        btn.disabled = true;
+        btn.innerHTML = '⌛ Salvando...';
+
+        try {
+            const res = await fetch(`${API}?action=confirm_import`, {
+                method: 'POST',
+                body: JSON.stringify(extractedLessons),
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            const data = await res.json();
+            
+            if (data.success) {
+                document.getElementById('importResumo').innerHTML = '<div class="alert alert-success">✅ Importação concluída com sucesso!</div>';
+                document.getElementById('formImportacao').reset();
+                extractedLessons = null;
+                loadData();
+            } else {
+                document.getElementById('importResumo').innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+            }
+        } catch (err) {
+            document.getElementById('importResumo').innerHTML = `<div class="alert alert-danger">Erro: ${err.message}</div>`;
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    // Chamar renderImportForm quando os dados são carregados
+    const originalRenderAll = renderAll;
+    renderAll = function() {
+        originalRenderAll();
+        renderImportForm();
+    };
 
     loadData();
 </script>

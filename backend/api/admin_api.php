@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once 'db.php';
+require_once 'gemini_service.php';
 
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS");
@@ -119,6 +120,98 @@ switch ($action) {
     case 'reset_all':
         $pdo->prepare("UPDATE aulas_planejadas SET data_uso = NULL WHERE usuario_id = ?")->execute([$user_id]);
         echo json_encode(['success' => true]);
+        break;
+
+    case 'extract_lessons':
+        $data = json_decode(file_get_contents('php://input'), true);
+        $turmas = $data['turmas'];
+        $disciplina = $data['disciplina'];
+        $texto = $data['texto'];
+
+        try {
+            $prompt = "Extraia as aulas do texto abaixo.
+Para cada aula, identifique:
+- numero: número da aula (inteiro)
+- titulo: título/assunto da aula
+- habilidades: habilidades ou competências mencionadas (se houver)
+
+Responda ESTRITAMENTE um array JSON no formato:
+[
+  {\"numero\": 1, \"titulo\": \"Título da Aula 1\", \"habilidades\": \"Habilidade 1\"},
+  {\"numero\": 2, \"titulo\": \"Título da Aula 2\", \"habilidades\": \"Habilidade 2\"}
+]
+
+Não responda nada além do JSON.
+
+Texto:
+{$texto}";
+            
+            $result = callGemini($prompt, 0.1);
+            
+            // Ordenar as aulas por número
+            usort($result, function($a, $b) {
+                return $a['numero'] - $b['numero'];
+            });
+
+            echo json_encode([
+                'turmas' => $turmas,
+                'disciplina' => $disciplina,
+                'aulas' => $result
+            ]);
+        } catch (Exception $e) {
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+        break;
+
+    case 'confirm_import':
+        $data = json_decode(file_get_contents('php://input'), true);
+        $turmas = $data['turmas'];
+        $disciplina = $data['disciplina'];
+        $aulas = $data['aulas'];
+
+        try {
+            // Iniciar transação
+            $pdo->beginTransaction();
+
+            // Para cada turma, calcular a última ordem e inserir as aulas em bulk
+            foreach ($turmas as $turma) {
+                // Obter a última ordem para essa turma e disciplina
+                $stmt = $pdo->prepare("SELECT MAX(ordem) as max_ordem FROM aulas_planejadas WHERE usuario_id = ? AND turma = ? AND disciplina = ?");
+                $stmt->execute([$user_id, $turma, $disciplina]);
+                $res = $stmt->fetch();
+                $ordemAtual = $res['max_ordem'] ?? 0;
+
+                // Preparar os valores para bulk insert
+                $valores = [];
+                $params = [];
+                foreach ($aulas as $aula) {
+                    $ordemAtual++;
+                    $conteudo = $aula['titulo'];
+                    if (!empty($aula['habilidades'])) {
+                        $conteudo .= ' - Habilidades: ' . $aula['habilidades'];
+                    }
+                    $valores[] = "(?, ?, ?, ?, ?)";
+                    $params[] = $user_id;
+                    $params[] = $turma;
+                    $params[] = $disciplina;
+                    $params[] = $ordemAtual;
+                    $params[] = $conteudo;
+                }
+
+                // Executar bulk insert
+                $sql = "INSERT INTO aulas_planejadas (usuario_id, turma, disciplina, ordem, conteudo) VALUES " . implode(', ', $valores);
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute($params);
+            }
+
+            // Commit da transação
+            $pdo->commit();
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            // Rollback em caso de erro
+            $pdo->rollBack();
+            echo json_encode(['error' => $e->getMessage()]);
+        }
         break;
 
     default:
