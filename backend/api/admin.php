@@ -214,7 +214,12 @@ $is_admin = ($_SESSION['user_role'] === 'admin');
 
     async function loadData() {
         const res = await fetch(`${API}?action=list`);
-        state = await res.json();
+        const data = await res.json();
+        if (data.error) {
+            alert('Erro ao carregar dados: ' + data.error);
+            return;
+        }
+        state = data;
         renderAll();
         if (<?php echo $is_admin ? 'true' : 'false'; ?>) loadProfs();
     }

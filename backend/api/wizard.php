@@ -8,145 +8,158 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $user_id = $_SESSION['user_id'];
+$planos_existentes = [];
+$disciplinas_existentes = [];
+$turmas = [];
 
-// Lógica para salvar os passos via AJAX
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    header('Content-Type: application/json');
-    $data = json_decode(file_get_contents('php://input'), true);
-    $step = $data['step'] ?? 0;
+try {
+    // Lógica para salvar os passos via AJAX
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        header('Content-Type: application/json');
+        $data = json_decode(file_get_contents('php://input'), true);
+        $step = $data['step'] ?? 0;
 
-    try {
-        if ($step == 1) {
-            // Passo 1: Criar Plano Mestre
-            $stmt = $pdo->prepare("INSERT INTO planos_mestres (usuario_id, nome_plano, disciplina, carga_horaria_total) VALUES (?, ?, ?, ?)");
-            $stmt->execute([$user_id, $data['nome_plano'], $data['disciplina'], $data['carga_horaria_total']]);
-            $plano_id = $pdo->lastInsertId();
-            echo json_encode(['success' => true, 'plano_id' => $plano_id]);
-            exit;
-        }
+        try {
+            if ($step == 1) {
+                // Passo 1: Criar Plano Mestre
+                $stmt = $pdo->prepare("INSERT INTO planos_mestres (usuario_id, nome_plano, disciplina, carga_horaria_total) VALUES (?, ?, ?, ?)");
+                $stmt->execute([$user_id, $data['nome_plano'], $data['disciplina'], $data['carga_horaria_total']]);
+                $plano_id = $pdo->lastInsertId();
+                echo json_encode(['success' => true, 'plano_id' => $plano_id]);
+                exit;
+            }
 
-        if ($step == 2) {
-            // Passo 2: Adicionar Habilidades (processamento em massa)
-            $plano_id = $data['plano_id'];
-            $habilidades_raw = $data['habilidades']; // Texto do textarea
-            $linhas = explode("\n", $habilidades_raw);
-            
-            $stmt = $pdo->prepare("INSERT INTO habilidades_plano (plano_id, codigo_habilidade, descricao) VALUES (?, ?, ?)");
-            
-            foreach ($linhas as $linha) {
-                $linha = trim($linha);
-                if (empty($linha)) continue;
+            if ($step == 2) {
+                // Passo 2: Adicionar Habilidades (processamento em massa)
+                $plano_id = $data['plano_id'];
+                $habilidades_raw = $data['habilidades']; // Texto do textarea
+                $linhas = explode("\n", $habilidades_raw);
                 
-                // Tenta separar por ":" ou "-" (priorizando ":" se ambos existirem)
-                $codigo = $linha;
-                $descricao = $linha;
+                $stmt = $pdo->prepare("INSERT INTO habilidades_plano (plano_id, codigo_habilidade, descricao) VALUES (?, ?, ?)");
                 
-                if (strpos($linha, ':') !== false) {
-                    $partes = explode(":", $linha, 2);
-                    $codigo = trim($partes[0]);
-                    $descricao = trim($partes[1]);
-                } elseif (strpos($linha, '-') !== false) {
-                    $partes = explode("-", $linha, 2);
-                    $codigo = trim($partes[0]);
-                    $descricao = trim($partes[1]);
+                foreach ($linhas as $linha) {
+                    $linha = trim($linha);
+                    if (empty($linha)) continue;
+                    
+                    // Tenta separar por ":" ou "-" (priorizando ":" se ambos existirem)
+                    $codigo = $linha;
+                    $descricao = $linha;
+                    
+                    if (strpos($linha, ':') !== false) {
+                        $partes = explode(":", $linha, 2);
+                        $codigo = trim($partes[0]);
+                        $descricao = trim($partes[1]);
+                    } elseif (strpos($linha, '-') !== false) {
+                        $partes = explode("-", $linha, 2);
+                        $codigo = trim($partes[0]);
+                        $descricao = trim($partes[1]);
+                    }
+                    
+                    $stmt->execute([$plano_id, $codigo, $descricao]);
                 }
                 
-                $stmt->execute([$plano_id, $codigo, $descricao]);
+                echo json_encode(['success' => true]);
+                exit;
+            }
+
+            if ($step == 3) {
+                // Passo 3: Sequenciador de Aulas (Simplificado, pois a IA vai detalhar)
+                // Apenas registramos que o passo 3 foi concluído
+                echo json_encode(['success' => true]);
+                exit;
+            }
+
+            if ($step === 'ai') {
+                // Passo AI: Salvar Plano Revisado
+                $plano_id = $data['plano_id'];
+                $aulas = $data['aulas'] ?? [];
+                
+                // Limpa detalhes anteriores se houver (caso esteja voltando e salvando de novo)
+                $pdo->prepare("DELETE FROM detalhes_plano WHERE plano_id = ?")->execute([$plano_id]);
+                
+                $stmt = $pdo->prepare("INSERT INTO detalhes_plano (plano_id, sequencia, topico, descricao, atividades) VALUES (?, ?, ?, ?, ?)");
+                foreach ($aulas as $aula) {
+                    $stmt->execute([
+                        $plano_id, 
+                        $aula['sequencia'], 
+                        $aula['topico'], 
+                        $aula['descricao'], 
+                        $aula['atividades']
+                    ]);
+                }
+                
+                echo json_encode(['success' => true]);
+                exit;
+            }
+
+            if ($step == 4) {
+                // Passo 4: Atribuição de Turmas
+                $plano_id = $data['plano_id'];
+                $turmas_selecionadas = $data['turmas'] ?? [];
+                
+                $stmt = $pdo->prepare("INSERT INTO atribuicoes (plano_id, turma_id) VALUES (?, ?)");
+                foreach ($turmas_selecionadas as $turma_id) {
+                    $stmt->execute([$plano_id, $turma_id]);
+                }
+                
+                echo json_encode(['success' => true]);
+                exit;
             }
             
-            echo json_encode(['success' => true]);
+            // Outros passos serão implementados conforme a necessidade do frontend
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
             exit;
         }
+    }
 
-        if ($step == 3) {
-            // Passo 3: Sequenciador de Aulas (Simplificado, pois a IA vai detalhar)
-            // Apenas registramos que o passo 3 foi concluído
-            echo json_encode(['success' => true]);
-            exit;
-        }
-
-        if ($step === 'ai') {
-            // Passo AI: Salvar Plano Revisado
-            $plano_id = $data['plano_id'];
-            $aulas = $data['aulas'] ?? [];
-            
-            // Limpa detalhes anteriores se houver (caso esteja voltando e salvando de novo)
-            $pdo->prepare("DELETE FROM detalhes_plano WHERE plano_id = ?")->execute([$plano_id]);
-            
-            $stmt = $pdo->prepare("INSERT INTO detalhes_plano (plano_id, sequencia, topico, descricao, atividades) VALUES (?, ?, ?, ?, ?)");
-            foreach ($aulas as $aula) {
-                $stmt->execute([
-                    $plano_id, 
-                    $aula['sequencia'], 
-                    $aula['topico'], 
-                    $aula['descricao'], 
-                    $aula['atividades']
-                ]);
-            }
-            
-            echo json_encode(['success' => true]);
-            exit;
-        }
-
-        if ($step == 4) {
-            // Passo 4: Atribuição de Turmas
-            $plano_id = $data['plano_id'];
-            $turmas_selecionadas = $data['turmas'] ?? [];
-            
-            $stmt = $pdo->prepare("INSERT INTO atribuicoes (plano_id, turma_id) VALUES (?, ?)");
-            foreach ($turmas_selecionadas as $turma_id) {
-                $stmt->execute([$plano_id, $turma_id]);
-            }
-            
-            echo json_encode(['success' => true]);
-            exit;
-        }
+    // Lógica para carregar dados de um plano (AJAX)
+    if (isset($_GET['action']) && $_GET['action'] === 'get_plano') {
+        header('Content-Type: application/json');
+        $id = $_GET['id'];
+        $stmt = $pdo->prepare("SELECT * FROM planos_mestres WHERE id = ? AND usuario_id = ?");
+        $stmt->execute([$id, $user_id]);
+        $plano = $stmt->fetch();
         
-        // Outros passos serão implementados conforme a necessidade do frontend
-    } catch (Exception $e) {
-        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        $stmt = $pdo->prepare("SELECT * FROM habilidades_plano WHERE plano_id = ?");
+        $stmt->execute([$id]);
+        $habilidades = $stmt->fetchAll();
+        
+        $stmt = $pdo->prepare("SELECT * FROM detalhes_plano WHERE plano_id = ? ORDER BY sequencia");
+        $stmt->execute([$id]);
+        $detalhes = $stmt->fetchAll();
+        
+        echo json_encode([
+            'plano' => $plano,
+            'habilidades' => $habilidades,
+            'detalhes' => $detalhes
+        ]);
         exit;
     }
-}
 
-// Busca planos existentes para clonagem
-$stmt_planos = $pdo->prepare("SELECT id, nome_plano FROM planos_mestres WHERE usuario_id = ?");
-$stmt_planos->execute([$user_id]);
-$planos_existentes = $stmt_planos->fetchAll();
+    // Busca planos existentes para clonagem (tentativa)
+    try {
+        $stmt_planos = $pdo->prepare("SELECT id, nome_plano FROM planos_mestres WHERE usuario_id = ?");
+        $stmt_planos->execute([$user_id]);
+        $planos_existentes = $stmt_planos->fetchAll();
+    } catch (PDOException $e) {
+        $planos_existentes = [];
+    }
 
-// Lógica para carregar dados de um plano (AJAX)
-if (isset($_GET['action']) && $_GET['action'] === 'get_plano') {
-    header('Content-Type: application/json');
-    $id = $_GET['id'];
-    $stmt = $pdo->prepare("SELECT * FROM planos_mestres WHERE id = ? AND usuario_id = ?");
-    $stmt->execute([$id, $user_id]);
-    $plano = $stmt->fetch();
-    
-    $stmt = $pdo->prepare("SELECT * FROM habilidades_plano WHERE plano_id = ?");
-    $stmt->execute([$id]);
-    $habilidades = $stmt->fetchAll();
-    
-    $stmt = $pdo->prepare("SELECT * FROM detalhes_plano WHERE plano_id = ? ORDER BY sequencia");
-    $stmt->execute([$id]);
-    $detalhes = $stmt->fetchAll();
-    
-    echo json_encode([
-        'plano' => $plano,
-        'habilidades' => $habilidades,
-        'detalhes' => $detalhes
-    ]);
+    // Busca disciplinas existentes
+    $stmt_disc = $pdo->prepare("SELECT nome FROM disciplinas WHERE usuario_id = ?");
+    $stmt_disc->execute([$user_id]);
+    $disciplinas_existentes = $stmt_disc->fetchAll(PDO::FETCH_COLUMN);
+
+    // Busca turmas para o Passo 4
+    $stmt_turmas = $pdo->prepare("SELECT id, nome FROM turmas WHERE usuario_id = ?");
+    $stmt_turmas->execute([$user_id]);
+    $turmas = $stmt_turmas->fetchAll();
+} catch (Exception $e) {
+    // Se algo der muito errado, redireciona para admin.php
+    header("Location: admin.php");
     exit;
 }
-
-// Busca disciplinas existentes
-$stmt_disc = $pdo->prepare("SELECT nome FROM disciplinas WHERE usuario_id = ?");
-$stmt_disc->execute([$user_id]);
-$disciplinas_existentes = $stmt_disc->fetchAll(PDO::FETCH_COLUMN);
-
-// Busca turmas para o Passo 4
-$stmt_turmas = $pdo->prepare("SELECT id, nome FROM turmas WHERE usuario_id = ?");
-$stmt_turmas->execute([$user_id]);
-$turmas = $stmt_turmas->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="pt-br">
