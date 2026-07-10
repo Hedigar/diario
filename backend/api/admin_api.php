@@ -50,111 +50,111 @@ $is_admin = ($_SESSION['user_role'] === 'admin');
 
 $action = $_GET['action'] ?? '';
 
-switch ($action) {
-    case 'list':
-        $stmt = $pdo->prepare("SELECT * FROM aulas_planejadas WHERE usuario_id = ? ORDER BY turma, ordem");
-        $stmt->execute([$user_id]);
-        $aulas = $stmt->fetchAll();
+try {
+    switch ($action) {
+        case 'list':
+            $stmt = $pdo->prepare("SELECT * FROM aulas_planejadas WHERE usuario_id = ? ORDER BY turma, ordem");
+            $stmt->execute([$user_id]);
+            $aulas = $stmt->fetchAll();
 
-        $stmt = $pdo->prepare("SELECT nome FROM turmas WHERE usuario_id = ? ORDER BY nome");
-        $stmt->execute([$user_id]);
-        $turmas = $stmt->fetchAll(PDO::FETCH_COLUMN);
+            $stmt = $pdo->prepare("SELECT nome FROM turmas WHERE usuario_id = ? ORDER BY nome");
+            $stmt->execute([$user_id]);
+            $turmas = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
-        $stmt = $pdo->prepare("SELECT nome FROM disciplinas WHERE usuario_id = ? ORDER BY nome");
-        $stmt->execute([$user_id]);
-        $disciplinas = $stmt->fetchAll(PDO::FETCH_COLUMN);
+            $stmt = $pdo->prepare("SELECT nome FROM disciplinas WHERE usuario_id = ? ORDER BY nome");
+            $stmt->execute([$user_id]);
+            $disciplinas = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
-        echo json_encode(['aulas' => $aulas, 'turmas' => $turmas, 'disciplinas' => $disciplinas]);
-        break;
+            echo json_encode(['aulas' => $aulas, 'turmas' => $turmas, 'disciplinas' => $disciplinas]);
+            break;
 
-    case 'save_aula':
-        $data = json_decode(file_get_contents('php://input'), true);
-        $turmas = is_array($data['turmas']) ? $data['turmas'] : [$data['turma']];
-        foreach ($turmas as $t) {
-            // CORREÇÃO: Pega a última ordem FILTRANDO por TURMA e DISCIPLINA
-            $stmt = $pdo->prepare("SELECT MAX(ordem) as max_ordem FROM aulas_planejadas WHERE usuario_id = ? AND turma = ? AND disciplina = ?");
-            $stmt->execute([$user_id, $t, $data['disciplina']]);
-            $res = $stmt->fetch();
-            $nova_ordem = ($res['max_ordem'] ?? 0) + 1;
+        case 'save_aula':
+            $data = json_decode(file_get_contents('php://input'), true);
+            $turmas = is_array($data['turmas']) ? $data['turmas'] : [$data['turma']];
+            foreach ($turmas as $t) {
+                // CORREÇÃO: Pega a última ordem FILTRANDO por TURMA e DISCIPLINA
+                $stmt = $pdo->prepare("SELECT MAX(ordem) as max_ordem FROM aulas_planejadas WHERE usuario_id = ? AND turma = ? AND disciplina = ?");
+                $stmt->execute([$user_id, $t, $data['disciplina']]);
+                $res = $stmt->fetch();
+                $nova_ordem = ($res['max_ordem'] ?? 0) + 1;
 
-            $stmt = $pdo->prepare("INSERT INTO aulas_planejadas (usuario_id, turma, disciplina, ordem, conteudo) VALUES (?, ?, ?, ?, ?)");
-            $stmt->execute([$user_id, $t, $data['disciplina'], $nova_ordem, $data['conteudo']]);
-        }
-        echo json_encode(['success' => true]);
-        break;
+                $stmt = $pdo->prepare("INSERT INTO aulas_planejadas (usuario_id, turma, disciplina, ordem, conteudo) VALUES (?, ?, ?, ?, ?)");
+                $stmt->execute([$user_id, $t, $data['disciplina'], $nova_ordem, $data['conteudo']]);
+            }
+            echo json_encode(['success' => true]);
+            break;
 
-    case 'set_next':
-        $id = $_GET['id'] ?? '';
-        $stmt = $pdo->prepare("SELECT turma, disciplina, ordem FROM aulas_planejadas WHERE id = ? AND usuario_id = ?");
-        $stmt->execute([$id, $user_id]);
-        $aula = $stmt->fetch();
-        if ($aula) {
-            // CORREÇÃO: Reseta data_uso apenas da mesma TURMA e DISCIPLINA
-            $stmt = $pdo->prepare("UPDATE aulas_planejadas SET data_uso = NULL WHERE usuario_id = ? AND turma = ? AND disciplina = ? AND ordem >= ?");
-            $stmt->execute([$user_id, $aula['turma'], $aula['disciplina'], $aula['ordem']]);
-        }
-        echo json_encode(['success' => true]);
-        break;
+        case 'set_next':
+            $id = $_GET['id'] ?? '';
+            $stmt = $pdo->prepare("SELECT turma, disciplina, ordem FROM aulas_planejadas WHERE id = ? AND usuario_id = ?");
+            $stmt->execute([$id, $user_id]);
+            $aula = $stmt->fetch();
+            if ($aula) {
+                // CORREÇÃO: Reseta data_uso apenas da mesma TURMA e DISCIPLINA
+                $stmt = $pdo->prepare("UPDATE aulas_planejadas SET data_uso = NULL WHERE usuario_id = ? AND turma = ? AND disciplina = ? AND ordem >= ?");
+                $stmt->execute([$user_id, $aula['turma'], $aula['disciplina'], $aula['ordem']]);
+            }
+            echo json_encode(['success' => true]);
+            break;
 
-    case 'delete_aula':
-        $pdo->prepare("DELETE FROM aulas_planejadas WHERE id = ? AND usuario_id = ?")->execute([$_GET['id'], $user_id]);
-        echo json_encode(['success' => true]);
-        break;
+        case 'delete_aula':
+            $pdo->prepare("DELETE FROM aulas_planejadas WHERE id = ? AND usuario_id = ?")->execute([$_GET['id'], $user_id]);
+            echo json_encode(['success' => true]);
+            break;
 
-    case 'add_turma':
-        $data = json_decode(file_get_contents('php://input'), true);
-        $pdo->prepare("INSERT IGNORE INTO turmas (usuario_id, nome) VALUES (?, ?)")->execute([$user_id, $data['nome']]);
-        echo json_encode(['success' => true]);
-        break;
+        case 'add_turma':
+            $data = json_decode(file_get_contents('php://input'), true);
+            $pdo->prepare("INSERT IGNORE INTO turmas (usuario_id, nome) VALUES (?, ?)")->execute([$user_id, $data['nome']]);
+            echo json_encode(['success' => true]);
+            break;
 
-    case 'del_turma':
-        $pdo->prepare("DELETE FROM turmas WHERE nome = ? AND usuario_id = ?")->execute([$_GET['nome'], $user_id]);
-        echo json_encode(['success' => true]);
-        break;
+        case 'del_turma':
+            $pdo->prepare("DELETE FROM turmas WHERE nome = ? AND usuario_id = ?")->execute([$_GET['nome'], $user_id]);
+            echo json_encode(['success' => true]);
+            break;
 
-    case 'add_disciplina':
-        $data = json_decode(file_get_contents('php://input'), true);
-        $pdo->prepare("INSERT IGNORE INTO disciplinas (usuario_id, nome) VALUES (?, ?)")->execute([$user_id, $data['nome']]);
-        echo json_encode(['success' => true]);
-        break;
+        case 'add_disciplina':
+            $data = json_decode(file_get_contents('php://input'), true);
+            $pdo->prepare("INSERT IGNORE INTO disciplinas (usuario_id, nome) VALUES (?, ?)")->execute([$user_id, $data['nome']]);
+            echo json_encode(['success' => true]);
+            break;
 
-    case 'del_disciplina':
-        $pdo->prepare("DELETE FROM disciplinas WHERE nome = ? AND usuario_id = ?")->execute([$_GET['nome'], $user_id]);
-        echo json_encode(['success' => true]);
-        break;
+        case 'del_disciplina':
+            $pdo->prepare("DELETE FROM disciplinas WHERE nome = ? AND usuario_id = ?")->execute([$_GET['nome'], $user_id]);
+            echo json_encode(['success' => true]);
+            break;
 
-    case 'list_profs':
-        if (!$is_admin) exit;
-        $stmt = $pdo->query("SELECT id, nome, email, role, api_token, criado_em FROM usuarios ORDER BY nome");
-        echo json_encode($stmt->fetchAll());
-        break;
+        case 'list_profs':
+            if (!$is_admin) exit;
+            $stmt = $pdo->query("SELECT id, nome, email, role, api_token, criado_em FROM usuarios ORDER BY nome");
+            echo json_encode($stmt->fetchAll());
+            break;
 
-    case 'save_prof':
-        if (!$is_admin) exit;
-        $data = json_decode(file_get_contents('php://input'), true);
-        $senha = password_hash($data['senha'], PASSWORD_DEFAULT);
-        $token = bin2hex(random_bytes(16));
-        $stmt = $pdo->prepare("INSERT INTO usuarios (nome, email, senha, role, api_token) VALUES (?, ?, ?, ?, ?)");
-        $stmt->execute([$data['nome'], $data['email'], $senha, $data['role'], $token]);
-        echo json_encode(['success' => true]);
-        break;
+        case 'save_prof':
+            if (!$is_admin) exit;
+            $data = json_decode(file_get_contents('php://input'), true);
+            $senha = password_hash($data['senha'], PASSWORD_DEFAULT);
+            $token = bin2hex(random_bytes(16));
+            $stmt = $pdo->prepare("INSERT INTO usuarios (nome, email, senha, role, api_token) VALUES (?, ?, ?, ?, ?)");
+            $stmt->execute([$data['nome'], $data['email'], $senha, $data['role'], $token]);
+            echo json_encode(['success' => true]);
+            break;
 
-    case 'del_prof':
-        if (!$is_admin) exit;
-        $id = $_GET['id'] ?? '';
-        if ($id != $user_id) {
-            $pdo->prepare("DELETE FROM usuarios WHERE id = ?")->execute([$id]);
-        }
-        echo json_encode(['success' => true]);
-        break;
+        case 'del_prof':
+            if (!$is_admin) exit;
+            $id = $_GET['id'] ?? '';
+            if ($id != $user_id) {
+                $pdo->prepare("DELETE FROM usuarios WHERE id = ?")->execute([$id]);
+            }
+            echo json_encode(['success' => true]);
+            break;
 
-    case 'reset_all':
-        $pdo->prepare("UPDATE aulas_planejadas SET data_uso = NULL WHERE usuario_id = ?")->execute([$user_id]);
-        echo json_encode(['success' => true]);
-        break;
+        case 'reset_all':
+            $pdo->prepare("UPDATE aulas_planejadas SET data_uso = NULL WHERE usuario_id = ?")->execute([$user_id]);
+            echo json_encode(['success' => true]);
+            break;
 
-    case 'extract_lessons':
-        try {
+        case 'extract_lessons':
             $data = json_decode(file_get_contents('php://input'), true);
             if (!$data) {
                 throw new Exception('JSON de entrada inválido');
@@ -201,22 +201,14 @@ Texto:
                 'disciplina' => $disciplina,
                 'aulas' => $result
             ]);
-        } catch (Exception $e) {
-            echo json_encode([
-                'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
-            ]);
-        }
-        break;
+            break;
 
-    case 'confirm_import':
-        $data = json_decode(file_get_contents('php://input'), true);
-        $turmas = $data['turmas'];
-        $disciplina = $data['disciplina'];
-        $aulas = $data['aulas'];
+        case 'confirm_import':
+            $data = json_decode(file_get_contents('php://input'), true);
+            $turmas = $data['turmas'];
+            $disciplina = $data['disciplina'];
+            $aulas = $data['aulas'];
 
-        try {
             // Iniciar transação
             $pdo->beginTransaction();
 
@@ -254,15 +246,17 @@ Texto:
             // Commit da transação
             $pdo->commit();
             echo json_encode(['success' => true]);
-        } catch (Exception $e) {
-            // Rollback em caso de erro
-            $pdo->rollBack();
-            echo json_encode(['error' => $e->getMessage()]);
-        }
-        break;
+            break;
 
-    default:
-        echo json_encode(['error' => 'Invalid action']);
-        break;
+        default:
+            echo json_encode(['error' => 'Invalid action']);
+            break;
+    }
+} catch (Exception $e) {
+    echo json_encode([
+        'error' => $e->getMessage(),
+        'file' => $e->getFile(),
+        'line' => $e->getLine()
+    ]);
 }
 ?>
