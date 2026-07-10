@@ -23,34 +23,32 @@ register_shutdown_function('handleShutdown');
 set_exception_handler(function($exception) {
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode([
-        'error' => 'Exceção não tratada',
-        'message' => $exception->getMessage(),
+        'error' => $exception->getMessage(),
         'file' => $exception->getFile(),
         'line' => $exception->getLine()
     ]);
 });
 
-session_start();
-require_once 'db.php';
-require_once 'gemini_helper.php';
-
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type");
-header('Content-Type: application/json; charset=utf-8');
-
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit; }
-
-if (!isset($_SESSION['user_id'])) {
-    echo json_encode(['error' => 'Unauthorized']); exit;
-}
-
-$user_id = $_SESSION['user_id'];
-$is_admin = ($_SESSION['user_role'] === 'admin');
-
-$action = $_GET['action'] ?? '';
-
 try {
+    session_start();
+    require_once 'db.php';
+    require_once 'gemini_helper.php';
+
+    header("Access-Control-Allow-Origin: *");
+    header("Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS");
+    header("Access-Control-Allow-Headers: Content-Type");
+    header('Content-Type: application/json; charset=utf-8');
+
+    if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit; }
+
+    if (!isset($_SESSION['user_id'])) {
+        echo json_encode(['error' => 'Unauthorized']); exit;
+    }
+
+    $user_id = $_SESSION['user_id'];
+    $is_admin = ($_SESSION['user_role'] === 'admin');
+
+    $action = $_GET['action'] ?? '';
     switch ($action) {
         case 'list':
             $stmt = $pdo->prepare("SELECT * FROM aulas_planejadas WHERE usuario_id = ? ORDER BY turma, ordem");

@@ -213,15 +213,22 @@ $is_admin = ($_SESSION['user_role'] === 'admin');
     let state = { aulas: [], turmas: [], disciplinas: [] };
 
     async function loadData() {
-        const res = await fetch(`${API}?action=list`);
-        const data = await res.json();
-        if (data.error) {
-            alert('Erro ao carregar dados: ' + data.error);
-            return;
+        try {
+            const res = await fetch(`${API}?action=list`);
+            const data = await res.json();
+            if (data.error) {
+                alert('Erro ao carregar dados: ' + data.error);
+                // Ainda renderiza o state padrão para não deixar a tela quebrada
+                renderAll();
+                return;
+            }
+            state = data;
+            renderAll();
+            if (<?php echo $is_admin ? 'true' : 'false'; ?>) loadProfs();
+        } catch (e) {
+            alert('Erro ao carregar dados: ' + e.message);
+            renderAll();
         }
-        state = data;
-        renderAll();
-        if (<?php echo $is_admin ? 'true' : 'false'; ?>) loadProfs();
     }
 
     function renderAll() {
