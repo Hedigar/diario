@@ -1,34 +1,7 @@
 <?php
-// Configurar para capturar todos os erros
-error_reporting(E_ALL);
+// Configurar para não exibir erros diretamente (mas logá-los)
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
-
-// Função para capturar erros fatais
-function handleShutdown() {
-    $error = error_get_last();
-    if ($error !== null && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode([
-            'error' => 'Erro interno no servidor',
-            'details' => $error['message'],
-            'file' => $error['file'],
-            'line' => $error['line']
-        ]);
-    }
-}
-register_shutdown_function('handleShutdown');
-
-// Função para capturar exceções não tratadas
-set_exception_handler(function($exception) {
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode([
-        'error' => 'Exceção não tratada',
-        'message' => $exception->getMessage(),
-        'file' => $exception->getFile(),
-        'line' => $exception->getLine()
-    ]);
-});
 
 session_start();
 require_once 'db.php';
@@ -154,12 +127,20 @@ switch ($action) {
         break;
 
     case 'extract_lessons':
-        $data = json_decode(file_get_contents('php://input'), true);
-        $turmas = $data['turmas'];
-        $disciplina = $data['disciplina'];
-        $texto = $data['texto'];
-
         try {
+            $data = json_decode(file_get_contents('php://input'), true);
+            if (!$data) {
+                throw new Exception('JSON de entrada inválido');
+            }
+            
+            $turmas = $data['turmas'] ?? null;
+            $disciplina = $data['disciplina'] ?? null;
+            $texto = $data['texto'] ?? null;
+
+            if (!$turmas || !$disciplina || !$texto) {
+                throw new Exception('Parâmetros incompletos (turmas, disciplina ou texto)');
+            }
+
             $prompt = "Extraia as aulas do texto abaixo.
 Para cada aula, identifique:
 - numero: número da aula (inteiro)
@@ -179,6 +160,10 @@ Texto:
             
             $result = callGemini($prompt, 0.1);
             
+            if (!$result || !is_array($result)) {
+                throw new Exception('Resultado da IA não é um array válido');
+            }
+            
             // Ordenar as aulas por número
             usort($result, function($a, $b) {
                 return $a['numero'] - $b['numero'];
@@ -190,7 +175,11 @@ Texto:
                 'aulas' => $result
             ]);
         } catch (Exception $e) {
-            echo json_encode(['error' => $e->getMessage()]);
+            echo json_encode([
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
         }
         break;
 
