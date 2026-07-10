@@ -1,6 +1,14 @@
 <?php
+// Verifica se o config.php está incluído
+if (!defined('GEMINI_API_KEY')) {
+    throw new Exception('GEMINI_API_KEY não está definida (certifique-se que config.php está incluído)');
+}
+
 function callGemini($prompt, $temperature = 0.3) {
     $apiKey = GEMINI_API_KEY;
+    if (empty($apiKey)) {
+        throw new Exception('GEMINI_API_KEY está vazia');
+    }
     $url = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=" . $apiKey;
 
     $payload = [
