@@ -1,6 +1,8 @@
 <?php
-session_start();
-require_once 'db.php';
+// Inclui db.php apenas se não estiver incluído
+if (!defined('DB_HOST')) {
+    require_once 'db.php';
+}
 
 function callGemini($prompt, $temperature = 0.3) {
     $apiKey = GEMINI_API_KEY;
@@ -58,12 +60,19 @@ function callGemini($prompt, $temperature = 0.3) {
     return $jsonData;
 }
 
-if (!isset($_SESSION['user_id'])) {
-    echo json_encode(['success' => false, 'error' => 'Não autorizado']);
-    exit;
+// Verifica sessão apenas se este arquivo estiver sendo acessado diretamente
+if (basename(__FILE__) === basename($_SERVER['SCRIPT_NAME'])) {
+    if (session_status() == PHP_SESSION_NONE) {
+        session_start();
+    }
+    if (!isset($_SESSION['user_id'])) {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'error' => 'Não autorizado']);
+        exit;
+    }
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && basename(__FILE__) === basename($_SERVER['SCRIPT_NAME'])) {
     header('Content-Type: application/json');
     $data = json_decode(file_get_contents('php://input'), true);
     
