@@ -1,7 +1,34 @@
 <?php
-// Configurar para não exibir erros diretamente (mas logá-los)
+// Configurar para capturar todos os erros
+error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
+
+// Função para capturar erros fatais
+function handleShutdown() {
+    $error = error_get_last();
+    if ($error !== null && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'error' => 'Erro interno no servidor',
+            'details' => $error['message'],
+            'file' => $error['file'],
+            'line' => $error['line']
+        ]);
+    }
+}
+register_shutdown_function('handleShutdown');
+
+// Função para capturar exceções não tratadas
+set_exception_handler(function($exception) {
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'error' => 'Exceção não tratada',
+        'message' => $exception->getMessage(),
+        'file' => $exception->getFile(),
+        'line' => $exception->getLine()
+    ]);
+});
 
 session_start();
 require_once 'db.php';
