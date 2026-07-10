@@ -5,7 +5,7 @@ ini_set('log_errors', 1);
 
 session_start();
 require_once 'db.php';
-require_once 'gemini_service.php';
+require_once 'gemini_helper.php';
 
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS");
