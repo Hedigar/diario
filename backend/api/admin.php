@@ -15,24 +15,33 @@ $is_admin = ($_SESSION['user_role'] === 'admin');
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         :root { --primary-color: #4f46e5; --primary-hover: #4338ca; --bg-color: #f9fafb; }
-        body { font-family: 'Inter', sans-serif; background-color: var(--bg-color); color: #111827; }
-        .navbar { background-color: white; border-bottom: 1px solid #e5e7eb; padding: 1rem 0; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg-color); color: #111827; height: 100vh; overflow: hidden; }
+        .navbar { background-color: white; border-bottom: 1px solid #e5e7eb; padding: 1rem 0; z-index: 1000; }
         .navbar-brand { font-weight: 700; color: var(--primary-color) !important; display: flex; align-items: center; gap: 10px; }
         .nav-link { border: none !important; color: #6b7280; font-weight: 600; padding: 10px 0; position: relative; cursor: pointer; }
         .nav-link.active { color: var(--primary-color) !important; }
         .card { border: none; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
         .btn-primary { background-color: var(--primary-color); border: none; font-weight: 600; }
-        .lesson-card { border-left: 4px solid #e5e7eb; transition: transform 0.2s; }
+        .sidebar { background: white; border-right: 1px solid #e5e7eb; height: calc(100vh - 72px); overflow-y: auto; }
+        .sidebar-item { padding: 12px 16px; cursor: pointer; border-left: 3px solid transparent; transition: all 0.2s; }
+        .sidebar-item:hover { background: #f9fafb; }
+        .sidebar-item.active { background: #eff6ff; border-left-color: var(--primary-color); color: var(--primary-color); font-weight: 600; }
+        .main-content { height: calc(100vh - 72px); overflow-y: auto; }
+        .lesson-card { border-left: 4px solid #e5e7eb; transition: all 0.2s; margin-bottom: 0.5rem; }
         .lesson-card.used { border-left-color: #10b981; background-color: #f0fdf4; }
+        .lesson-card.current { border-left-color: var(--primary-color); background-color: #eef2ff; box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2); }
         .lesson-card.pending { border-left-color: #f59e0b; }
-        .sticky-form { position: sticky; top: 20px; }
+        .accordion-button:not(.collapsed) { background-color: #f9fafb; box-shadow: none; }
+        .accordion-button:focus { box-shadow: none; }
         .token-box { background: #f3f4f6; padding: 10px; border-radius: 8px; font-family: monospace; font-size: 0.9em; word-break: break-all; }
+        .loading-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.8); display: flex; align-items: center; justify-content: center; z-index: 100; }
+        .spinner-border-sm { width: 1.5rem; height: 1.5rem; }
     </style>
 </head>
 <body>
 
-<nav class="navbar mb-4">
-    <div class="container">
+<nav class="navbar">
+    <div class="container-fluid px-4">
         <a class="navbar-brand" href="#">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
             SEDUC Smart Admin
@@ -44,166 +53,186 @@ $is_admin = ($_SESSION['user_role'] === 'admin');
     </div>
 </nav>
 
-<div class="container">
-    <ul class="nav nav-tabs mb-4" id="adminTabs" role="tablist">
-        <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#aulas">📚 Minhas Aulas</a></li>
-        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#importacao">📥 Importação em Massa</a></li>
-        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#config">⚙️ Turmas e Disciplinas</a></li>
-        <li class="nav-item"><a class="nav-link" href="wizard.php">🪄 Planejamento Mestre</a></li>
-        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#token">🔑 Script Token</a></li>
-        <?php if ($is_admin): ?>
-        <li class="nav-item"><a class="nav-link text-primary" data-bs-toggle="tab" href="#usuarios">👥 Gerenciar Professores</a></li>
-        <?php endif; ?>
-    </ul>
-
-    <div class="tab-content">
-        <!-- ABA DE AULAS -->
-        <div class="tab-pane fade show active" id="aulas">
-            <div class="row">
-                <div class="col-lg-4">
-                    <div class="card sticky-form mb-4">
-                        <div class="card-body">
-                            <h5 class="card-title mb-4">Nova Aula</h5>
-                            <form id="formAula">
-                                <div class="mb-3">
-                                    <label class="form-label small fw-bold">Disciplina</label>
-                                    <select id="selectDisciplina" class="form-select" required></select>
+<div class="container-fluid p-0">
+    <div class="row g-0">
+        <!-- Sidebar -->
+        <div class="col-12 col-md-3 col-lg-2 sidebar">
+            <div class="p-3">
+                <ul class="nav nav-pills flex-column mb-3" id="adminTabs" role="tablist">
+                    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#aulas">📚 Aulas</a></li>
+                    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#importacao">📥 Importar</a></li>
+                    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#config">⚙️ Config</a></li>
+                    <li class="nav-item"><a class="nav-link" href="wizard.php">🪄 Wizard</a></li>
+                    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#token">🔑 Token</a></li>
+                    <?php if ($is_admin): ?>
+                    <li class="nav-item"><a class="nav-link text-primary" data-bs-toggle="tab" href="#usuarios">👥 Professores</a></li>
+                    <?php endif; ?>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="col-12 col-md-9 col-lg-10 main-content">
+            <div class="tab-content p-4">
+                <!-- ABA DE AULAS -->
+                <div class="tab-pane fade show active" id="aulas">
+                    <div class="row g-4">
+                        <div class="col-12 col-lg-3">
+                            <div class="card sticky-top" style="top: 1rem;">
+                                <div class="card-body">
+                                    <h5 class="card-title mb-4">Turmas</h5>
+                                    <div id="sidebarTurmas"></div>
+                                    <hr class="my-4">
+                                    <h5 class="card-title mb-4">Nova Aula</h5>
+                                    <form id="formAula">
+                                        <div class="mb-3">
+                                            <label class="form-label small fw-bold">Disciplina</label>
+                                            <select id="selectDisciplina" class="form-select" required></select>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label small fw-bold">Conteúdo do Registro</label>
+                                            <textarea id="conteudo" class="form-control" rows="4" required placeholder="Digite aqui as atividades..."></textarea>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label small fw-bold">Atribuir para Turmas</label>
+                                            <div id="checkTurmas" class="d-flex flex-wrap gap-2 p-2 border rounded bg-light"></div>
+                                        </div>
+                                        <button type="submit" class="btn btn-primary w-100">Adicionar à Sequência</button>
+                                    </form>
                                 </div>
-                                <div class="mb-3">
-                                    <label class="form-label small fw-bold">Conteúdo do Registro</label>
-                                    <textarea id="conteudo" class="form-control" rows="6" required placeholder="Digite aqui as atividades..."></textarea>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-9">
+                            <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-4">
+                                <h4 class="mb-0" id="turmaTitle">Selecione uma turma</h4>
+                                <div class="d-flex gap-2">
+                                    <input type="text" id="searchLessons" class="form-control form-control-sm" style="width: 250px;" placeholder="🔍 Buscar aula...">
+                                    <button class="btn btn-outline-primary btn-sm" id="expandAllBtn">Expandir Todas</button>
+                                    <button class="btn btn-outline-secondary btn-sm" id="collapseAllBtn">Recolher Todas</button>
                                 </div>
-                                <div class="mb-3">
-                                    <label class="form-label small fw-bold">Atribuir para Turmas</label>
-                                    <div id="checkTurmas" class="d-flex flex-wrap gap-2 p-2 border rounded bg-light"></div>
+                            </div>
+                            <div id="lessonsArea" style="position: relative;">
+                                <div class="card p-5 text-center text-muted">
+                                    <h5>👋 Selecione uma turma na barra lateral</h5>
+                                    <p class="mb-0">As aulas da turma selecionada aparecerão aqui</p>
                                 </div>
-                                <button type="submit" class="btn btn-primary w-100">Adicionar à Sequência</button>
-                            </form>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="col-lg-8">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="mb-0">Minhas Sequências</h5>
-                        <select id="filterTurma" class="form-select form-select-sm" style="width: 150px;" onchange="renderAulas()">
-                            <option value="">Todas as Turmas</option>
-                        </select>
-                    </div>
-                    <div id="listaAulas"></div>
-                </div>
-            </div>
-        </div>
 
-        <!-- ABA DE IMPORTAÇÃO EM MASSA -->
-        <div class="tab-pane fade" id="importacao">
-            <div class="row">
-                <div class="col-lg-6">
-                    <div class="card mb-4">
-                        <div class="card-body">
-                            <h5 class="card-title mb-4">Importar Aulas em Massa</h5>
-                            <form id="formImportacao">
-                                <div class="mb-3">
-                                    <label class="form-label small fw-bold">Disciplina</label>
-                                    <select id="importDisciplina" class="form-select" required></select>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label small fw-bold">Turmas (selecione múltiplas)</label>
-                                    <select id="importTurmas" class="form-select" multiple required style="min-height: 150px;"></select>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label small fw-bold">Cole a lista de aulas (texto livre)</label>
-                                    <textarea id="importTexto" class="form-control" rows="10" required placeholder="Exemplo:
+                <!-- ABA DE IMPORTAÇÃO EM MASSA -->
+                <div class="tab-pane fade" id="importacao">
+                    <div class="row g-4">
+                        <div class="col-12 col-lg-6">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title mb-4">Importar Aulas em Massa</h5>
+                                    <form id="formImportacao">
+                                        <div class="mb-3">
+                                            <label class="form-label small fw-bold">Disciplina</label>
+                                            <select id="importDisciplina" class="form-select" required></select>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label small fw-bold">Turmas (selecione múltiplas)</label>
+                                            <select id="importTurmas" class="form-select" multiple required style="min-height: 150px;"></select>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label small fw-bold">Cole a lista de aulas (texto livre)</label>
+                                            <textarea id="importTexto" class="form-control" rows="10" required placeholder="Exemplo:
 1. Introdução à Matemática - Habilidade: BM1.1
 2. Números Inteiros - Habilidade: BM1.2
 3. Operações Básicas - Habilidade: BM1.3"></textarea>
+                                        </div>
+                                        <button type="submit" id="btnProcessar" class="btn btn-primary w-100">Processar e Extrair Aulas</button>
+                                    </form>
                                 </div>
-                                <button type="submit" id="btnProcessar" class="btn btn-primary w-100">Processar e Extrair Aulas</button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-lg-6">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title mb-4">Resumo da Importação</h5>
-                            <div id="importResumo"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ABA DE CONFIGURAÇÃO -->
-        <div class="tab-pane fade" id="config">
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="card mb-4">
-                        <div class="card-body">
-                            <h5>Minhas Turmas</h5>
-                            <div class="input-group mb-3">
-                                <input type="text" id="newTurma" class="form-control" placeholder="Ex: 201">
-                                <button class="btn btn-primary" onclick="addTurma()">Adicionar</button>
                             </div>
-                            <div id="listTurmas" class="list-group list-group-flush"></div>
                         </div>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5>Minhas Disciplinas</h5>
-                            <div class="input-group mb-3">
-                                <input type="text" id="newDisciplina" class="form-control" placeholder="Ex: Física">
-                                <button class="btn btn-primary" onclick="addDisciplina()">Adicionar</button>
-                            </div>
-                            <div id="listDisciplinas" class="list-group list-group-flush"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ABA DE TOKEN -->
-        <div class="tab-pane fade" id="token">
-            <div class="card">
-                <div class="card-body">
-                    <h5>Seu Token de Acesso</h5>
-                    <p class="text-muted small">Use este token nas configurações do seu script Tampermonkey para que ele saiba quais aulas puxar.</p>
-                    <div class="token-box mb-3"><?php echo $_SESSION['api_token']; ?></div>
-                    <div class="alert alert-warning small">⚠️ Não compartilhe este token com ninguém. Ele dá acesso às suas sequências de aula.</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ABA DE USUÁRIOS (ADMIN ONLY) -->
-        <?php if ($is_admin): ?>
-        <div class="tab-pane fade" id="usuarios">
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5>Novo Professor</h5>
-                            <form id="formProf">
-                                <div class="mb-2"><input type="text" id="profNome" class="form-control" placeholder="Nome Completo" required></div>
-                                <div class="mb-2"><input type="email" id="profEmail" class="form-control" placeholder="E-mail" required></div>
-                                <div class="mb-2"><input type="password" id="profSenha" class="form-control" placeholder="Senha Inicial" required></div>
-                                <div class="mb-3">
-                                    <select id="profRole" class="form-select">
-                                        <option value="professor">Professor</option>
-                                        <option value="admin">Administrador</option>
-                                    </select>
+                        <div class="col-12 col-lg-6">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title mb-4">Resumo da Importação</h5>
+                                    <div id="importResumo"></div>
                                 </div>
-                                <button type="submit" class="btn btn-primary w-100">Criar Conta</button>
-                            </form>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-8">
-                    <div id="listProfs"></div>
+
+                <!-- ABA DE CONFIGURAÇÃO -->
+                <div class="tab-pane fade" id="config">
+                    <div class="row g-4">
+                        <div class="col-12 col-md-6">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5>Minhas Turmas</h5>
+                                    <div class="input-group mb-3">
+                                        <input type="text" id="newTurma" class="form-control" placeholder="Ex: 201">
+                                        <button class="btn btn-primary" onclick="addTurma()">Adicionar</button>
+                                    </div>
+                                    <div id="listTurmas" class="list-group list-group-flush"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5>Minhas Disciplinas</h5>
+                                    <div class="input-group mb-3">
+                                        <input type="text" id="newDisciplina" class="form-control" placeholder="Ex: Física">
+                                        <button class="btn btn-primary" onclick="addDisciplina()">Adicionar</button>
+                                    </div>
+                                    <div id="listDisciplinas" class="list-group list-group-flush"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
+
+                <!-- ABA DE TOKEN -->
+                <div class="tab-pane fade" id="token">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5>Seu Token de Acesso</h5>
+                            <p class="text-muted small">Use este token nas configurações do seu script Tampermonkey para que ele saiba quais aulas puxar.</p>
+                            <div class="token-box mb-3"><?php echo $_SESSION['api_token']; ?></div>
+                            <div class="alert alert-warning small">⚠️ Não compartilhe este token com ninguém. Ele dá acesso às suas sequências de aula.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ABA DE USUÁRIOS (ADMIN ONLY) -->
+                <?php if ($is_admin): ?>
+                <div class="tab-pane fade" id="usuarios">
+                    <div class="row g-4">
+                        <div class="col-12 col-md-4">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5>Novo Professor</h5>
+                                    <form id="formProf">
+                                        <div class="mb-2"><input type="text" id="profNome" class="form-control" placeholder="Nome Completo" required></div>
+                                        <div class="mb-2"><input type="email" id="profEmail" class="form-control" placeholder="E-mail" required></div>
+                                        <div class="mb-2"><input type="password" id="profSenha" class="form-control" placeholder="Senha Inicial" required></div>
+                                        <div class="mb-3">
+                                            <select id="profRole" class="form-select">
+                                                <option value="professor">Professor</option>
+                                                <option value="admin">Administrador</option>
+                                            </select>
+                                        </div>
+                                        <button type="submit" class="btn btn-primary w-100">Criar Conta</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-8">
+                            <div id="listProfs"></div>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
             </div>
         </div>
-        <?php endif; ?>
     </div>
 </div>
 
@@ -211,6 +240,8 @@ $is_admin = ($_SESSION['user_role'] === 'admin');
 <script>
     const API = 'admin_api.php';
     let state = { aulas: [], turmas: [], disciplinas: [] };
+    let selectedTurma = null;
+    let expandedAll = false;
 
     async function loadData() {
         try {
@@ -218,7 +249,6 @@ $is_admin = ($_SESSION['user_role'] === 'admin');
             const data = await res.json();
             if (data.error) {
                 alert('Erro ao carregar dados: ' + data.error);
-                // Ainda renderiza o state padrão para não deixar a tela quebrada
                 renderAll();
                 return;
             }
@@ -232,57 +262,131 @@ $is_admin = ($_SESSION['user_role'] === 'admin');
     }
 
     function renderAll() {
-        const container = document.getElementById('checkTurmas');
-        container.innerHTML = state.turmas.map(t => `
-            <div class="form-check">
-                <input class="form-check-input turma-check" type="checkbox" value="${t}" id="chk_${t}">
-                <label class="form-check-label small" for="chk_${t}">${t}</label>
-            </div>
-        `).join('');
-
+        renderSidebarTurmas();
+        renderFormTurmas();
         document.getElementById('selectDisciplina').innerHTML = state.disciplinas.map(d => `<option value="${d}">${d}</option>`).join('');
-        
-        const filter = document.getElementById('filterTurma');
-        const current = filter.value;
-        filter.innerHTML = '<option value="">Todas as Turmas</option>' + state.turmas.map(t => `<option value="${t}" ${t === current ? 'selected' : ''}>Turma ${t}</option>`).join('');
-        
-        renderAulas();
         renderConfig();
+        if (selectedTurma) {
+            renderLessonsForTurma(selectedTurma);
+        }
     }
 
-    function renderAulas() {
-        const container = document.getElementById('listaAulas');
-        const filter = document.getElementById('filterTurma').value;
-        const filtered = filter ? state.aulas.filter(a => a.turma === filter) : state.aulas;
+    function renderSidebarTurmas() {
+        const container = document.getElementById('sidebarTurmas');
+        if (state.turmas.length === 0) {
+            container.innerHTML = '<div class="text-muted small">Nenhuma turma cadastrada</div>';
+            return;
+        }
+        container.innerHTML = state.turmas.map(t => `
+            <div class="sidebar-item ${selectedTurma === t ? 'active' : ''}" onclick="selectTurma('${t}')">
+                📚 Turma ${t}
+            </div>
+        `).join('');
+    }
 
-        if (filtered.length === 0) {
-            container.innerHTML = '<div class="card p-5 text-center text-muted">Nenhuma aula cadastrada.</div>';
+    function selectTurma(turma) {
+        selectedTurma = turma;
+        renderSidebarTurmas();
+        renderLessonsForTurma(turma, true);
+    }
+
+    async function renderLessonsForTurma(turma, showLoading = false) {
+        const container = document.getElementById('lessonsArea');
+        const title = document.getElementById('turmaTitle');
+        title.textContent = `📚 Turma ${turma}`;
+        
+        if (showLoading) {
+            container.innerHTML = `
+                <div class="loading-overlay">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                </div>
+            `;
+            await new Promise(r => setTimeout(r, 300));
+        }
+
+        const searchTerm = document.getElementById('searchLessons').value.toLowerCase();
+        const turmaAulas = state.aulas.filter(a => a.turma === turma);
+        
+        if (turmaAulas.length === 0) {
+            container.innerHTML = '<div class="card p-5 text-center text-muted">Nenhuma aula cadastrada para esta turma.</div>';
             return;
         }
 
+        // Group by disciplina
         const grouped = {};
-        filtered.forEach(a => { if (!grouped[a.turma]) grouped[a.turma] = []; grouped[a.turma].push(a); });
+        turmaAulas.forEach(a => {
+            if (!grouped[a.disciplina]) grouped[a.disciplina] = [];
+            grouped[a.disciplina].push(a);
+        });
 
-        container.innerHTML = Object.entries(grouped).map(([turma, aulas]) => `
-            <div class="mb-4">
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    <span class="badge bg-indigo p-2" style="background:#4f46e5">Turma ${turma}</span>
-                    <hr class="flex-grow-1 my-0">
-                </div>
-                ${aulas.map(a => `
-                    <div class="card mb-2 lesson-card ${a.data_uso ? 'used' : 'pending'}">
-                        <div class="card-body p-3 d-flex justify-content-between">
-                            <div>
-                                <div class="small fw-bold text-secondary mb-1">#${a.ordem} | ${a.disciplina} ${a.data_uso ? `<span class="badge bg-success ms-2">Usada em ${a.data_uso}</span>` : ''}</div>
-                                <div class="small">${a.conteudo}</div>
-                            </div>
-                            <div class="d-flex flex-column gap-1">
-                                <button class="btn btn-sm btn-link text-danger p-0" onclick="deleteAula(${a.id})">🗑️</button>
-                                <button class="btn btn-sm btn-link text-primary p-0" onclick="setNext(${a.id})" title="Definir como Próxima">🎯</button>
+        // For each disciplina, find current lesson (first without data_uso)
+        let html = '';
+        Object.entries(grouped).forEach(([disciplina, aulas]) => {
+            // Find current lesson index
+            let currentIndex = aulas.findIndex(a => !a.data_uso);
+            if (currentIndex === -1) currentIndex = aulas.length;
+
+            html += `
+                <div class="mb-4">
+                    <h5 class="mb-3">
+                        <span class="badge text-bg-primary">${disciplina}</span>
+                    </h5>
+                    <div class="accordion" id="accordion-${disciplina.replace(/\s/g, '-')}">
+            `;
+
+            aulas.forEach((a, idx) => {
+                const isUsed = !!a.data_uso;
+                const isCurrent = idx === currentIndex;
+                const matchesSearch = !searchTerm || 
+                    a.conteudo.toLowerCase().includes(searchTerm) || 
+                    String(a.ordem).includes(searchTerm);
+                
+                if (!matchesSearch) return;
+
+                const collapseId = `collapse-${a.id}`;
+                const headerId = `heading-${a.id}`;
+                
+                html += `
+                    <div class="accordion-item border-0 lesson-card ${isUsed ? 'used' : (isCurrent ? 'current' : 'pending')}">
+                        <h2 class="accordion-header" id="${headerId}">
+                            <button class="accordion-button ${expandedAll ? '' : 'collapsed'}" type="button" data-bs-toggle="collapse" data-bs-target="#${collapseId}" aria-expanded="${expandedAll}" aria-controls="${collapseId}">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge ${isCurrent ? 'text-bg-primary' : (isUsed ? 'text-bg-success' : 'text-bg-warning')}">#${a.ordem}</span>
+                                    <strong>${isCurrent ? '🎯 Próxima Aula' : (isUsed ? '✅ Aula Usada' : '📖 Aula Pendente')}</strong>
+                                    ${isUsed ? `<span class="text-muted small">(${a.data_uso})</span>` : ''}
+                                </div>
+                            </button>
+                        </h2>
+                        <div id="${collapseId}" class="accordion-collapse collapse ${expandedAll ? 'show' : ''}" data-bs-parent="#accordion-${disciplina.replace(/\s/g, '-')}">
+                            <div class="accordion-body">
+                                <p class="mb-3">${a.conteudo}</p>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-sm btn-outline-primary" onclick="setNext(${a.id})" title="Definir como Próxima">🎯 Definir como Próxima</button>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteAula(${a.id})">🗑️ Excluir</button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                `).join('')}
+                `;
+            });
+
+            html += `
+                    </div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+    }
+
+    function renderFormTurmas() {
+        const container = document.getElementById('checkTurmas');
+        container.innerHTML = state.turmas.map(t => `
+            <div class="form-check">
+                <input class="form-check-input turma-check" type="checkbox" value="${t}" id="chk-${t}">
+                <label class="form-check-label small" for="chk-${t}">${t}</label>
             </div>
         `).join('');
     }
@@ -311,26 +415,87 @@ $is_admin = ($_SESSION['user_role'] === 'admin');
         const turmas = Array.from(document.querySelectorAll('.turma-check:checked')).map(c => c.value);
         if (turmas.length === 0) return alert('Selecione as turmas');
         await fetch(`${API}?action=save_aula`, { method: 'POST', body: JSON.stringify({ turmas, disciplina: document.getElementById('selectDisciplina').value, conteudo: document.getElementById('conteudo').value }), headers: { 'Content-Type': 'application/json' } });
-        document.getElementById('conteudo').value = ''; loadData();
+        document.getElementById('conteudo').value = ''; 
+        await loadData();
     };
 
     if (<?php echo $is_admin ? 'true' : 'false'; ?>) {
         document.getElementById('formProf').onsubmit = async (e) => {
             e.preventDefault();
             await fetch(`${API}?action=save_prof`, { method: 'POST', body: JSON.stringify({ nome: document.getElementById('profNome').value, email: document.getElementById('profEmail').value, senha: document.getElementById('profSenha').value, role: document.getElementById('profRole').value }), headers: { 'Content-Type': 'application/json' } });
-            e.target.reset(); loadProfs();
+            e.target.reset(); 
+            loadProfs();
         };
     }
 
-    async function deleteAula(id) { if (confirm('Excluir aula?')) { await fetch(`${API}?action=delete_aula&id=${id}`); loadData(); } }
-    async function setNext(id) { if (confirm('Definir como próxima aula?')) { await fetch(`${API}?action=set_next&id=${id}`); loadData(); } }
-    async function addTurma() { const nome = document.getElementById('newTurma').value; if (nome) { await fetch(`${API}?action=add_turma`, { method: 'POST', body: JSON.stringify({nome}) }); document.getElementById('newTurma').value = ''; loadData(); } }
-    async function delTurma(nome) { if (confirm('Excluir turma?')) { await fetch(`${API}?action=del_turma&nome=${nome}`); loadData(); } }
-    async function addDisciplina() { const nome = document.getElementById('newDisciplina').value; if (nome) { await fetch(`${API}?action=add_disciplina`, { method: 'POST', body: JSON.stringify({nome}) }); document.getElementById('newDisciplina').value = ''; loadData(); } }
-    async function delDisciplina(nome) { if (confirm('Excluir disciplina?')) { await fetch(`${API}?action=del_disciplina&nome=${nome}`); loadData(); } }
-    async function delProf(id) { if (confirm('Excluir professor?')) { await fetch(`${API}?action=del_prof&id=${id}`); loadProfs(); } }
-    async function logout() { await fetch('api/auth.php?action=logout'); window.location.href = 'login.php'; }
-    async function resetAll() { if (confirm('Resetar todas as sequências?')) { await fetch(`${API}?action=reset_all`); loadData(); } }
+    async function deleteAula(id) { 
+        if (confirm('Excluir aula?')) { 
+            await fetch(`${API}?action=delete_aula&id=${id}`); 
+            await loadData(); 
+        } 
+    }
+    async function setNext(id) { 
+        if (confirm('Definir como próxima aula?')) { 
+            await fetch(`${API}?action=set_next&id=${id}`); 
+            await loadData(); 
+        } 
+    }
+    async function addTurma() { 
+        const nome = document.getElementById('newTurma').value; 
+        if (nome) { 
+            await fetch(`${API}?action=add_turma`, { method: 'POST', body: JSON.stringify({nome}) }); 
+            document.getElementById('newTurma').value = ''; 
+            await loadData(); 
+        } 
+    }
+    async function delTurma(nome) { 
+        if (confirm('Excluir turma?')) { 
+            await fetch(`${API}?action=del_turma&nome=${nome}`); 
+            if (selectedTurma === nome) selectedTurma = null;
+            await loadData(); 
+        } 
+    }
+    async function addDisciplina() { 
+        const nome = document.getElementById('newDisciplina').value; 
+        if (nome) { 
+            await fetch(`${API}?action=add_disciplina`, { method: 'POST', body: JSON.stringify({nome}) }); 
+            document.getElementById('newDisciplina').value = ''; 
+            await loadData(); 
+        } 
+    }
+    async function delDisciplina(nome) { 
+        if (confirm('Excluir disciplina?')) { 
+            await fetch(`${API}?action=del_disciplina&nome=${nome}`); 
+            await loadData(); 
+        } 
+    }
+    async function delProf(id) { 
+        if (confirm('Excluir professor?')) { 
+            await fetch(`${API}?action=del_prof&id=${id}`); 
+            loadProfs(); 
+        } 
+    }
+    async function logout() { 
+        await fetch('auth.php?action=logout'); 
+        window.location.href = 'login.php'; 
+    }
+
+    // Search functionality
+    document.getElementById('searchLessons').addEventListener('input', () => {
+        if (selectedTurma) {
+            renderLessonsForTurma(selectedTurma);
+        }
+    });
+
+    // Expand/collapse all
+    document.getElementById('expandAllBtn').addEventListener('click', () => {
+        expandedAll = true;
+        if (selectedTurma) renderLessonsForTurma(selectedTurma);
+    });
+    document.getElementById('collapseAllBtn').addEventListener('click', () => {
+        expandedAll = false;
+        if (selectedTurma) renderLessonsForTurma(selectedTurma);
+    });
 
     // Importação em massa
     let extractedLessons = null;
@@ -424,7 +589,7 @@ $is_admin = ($_SESSION['user_role'] === 'admin');
                 document.getElementById('importResumo').innerHTML = '<div class="alert alert-success">✅ Importação concluída com sucesso!</div>';
                 document.getElementById('formImportacao').reset();
                 extractedLessons = null;
-                loadData();
+                await loadData();
             } else {
                 document.getElementById('importResumo').innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
             }
@@ -440,6 +605,20 @@ $is_admin = ($_SESSION['user_role'] === 'admin');
     renderAll = function() {
         originalRenderAll();
         renderImportForm();
+    };
+
+    // Auto-select first turma if available
+    function autoSelectFirstTurma() {
+        if (state.turmas.length > 0 && !selectedTurma) {
+            selectTurma(state.turmas[0]);
+        }
+    }
+
+    // Override loadData to auto-select first turma
+    const originalLoadData = loadData;
+    loadData = async function() {
+        await originalLoadData();
+        autoSelectFirstTurma();
     };
 
     loadData();
