@@ -100,6 +100,24 @@ try {
             echo json_encode(['success' => true]);
             break;
 
+        case 'delete_aulas':
+            $data = json_decode(file_get_contents('php://input'), true);
+            $ids = $data['ids'] ?? [];
+            if (empty($ids)) {
+                echo json_encode(['error' => 'Nenhuma aula selecionada']);
+                break;
+            }
+
+            // Prepare placeholders (?, ?, ?) for the IN clause
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+            // Add user_id to the params array at the end
+            $params = array_merge($ids, [$user_id]);
+
+            $stmt = $pdo->prepare("DELETE FROM aulas_planejadas WHERE id IN ($placeholders) AND usuario_id = ?");
+            $stmt->execute($params);
+            echo json_encode(['success' => true, 'deleted' => $stmt->rowCount()]);
+            break;
+
         case 'add_turma':
             $data = json_decode(file_get_contents('php://input'), true);
             $pdo->prepare("INSERT IGNORE INTO turmas (usuario_id, nome) VALUES (?, ?)")->execute([$user_id, $data['nome']]);

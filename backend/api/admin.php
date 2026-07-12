@@ -105,7 +105,12 @@ $is_admin = ($_SESSION['user_role'] === 'admin');
                         <div class="col-12 col-lg-9">
                             <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-4">
                                 <h4 class="mb-0" id="turmaTitle">Selecione uma turma</h4>
-                                <div class="d-flex gap-2">
+                                <div class="d-flex gap-2 flex-wrap">
+                                    <div class="form-check align-self-center" id="selectAllContainer" style="display: none;">
+                                        <input class="form-check-input" type="checkbox" id="selectAllAulas">
+                                        <label class="form-check-label small" for="selectAllAulas">Selecionar Todas</label>
+                                    </div>
+                                    <button class="btn btn-danger btn-sm" id="deleteSelectedBtn" style="display: none;">🗑️ Excluir Selecionadas</button>
                                     <input type="text" id="searchLessons" class="form-control form-control-sm" style="width: 250px;" placeholder="🔍 Buscar aula...">
                                     <button class="btn btn-outline-primary btn-sm" id="expandAllBtn">Expandir Todas</button>
                                     <button class="btn btn-outline-secondary btn-sm" id="collapseAllBtn">Recolher Todas</button>
@@ -242,6 +247,7 @@ $is_admin = ($_SESSION['user_role'] === 'admin');
     let state = { aulas: [], turmas: [], disciplinas: [] };
     let selectedTurma = null;
     let expandedAll = false;
+    let selectedAulaIds = new Set();
 
     async function loadData() {
         try {
@@ -311,6 +317,8 @@ $is_admin = ($_SESSION['user_role'] === 'admin');
         
         if (turmaAulas.length === 0) {
             container.innerHTML = '<div class="card p-5 text-center text-muted">Nenhuma aula cadastrada para esta turma.</div>';
+            document.getElementById('selectAllContainer').style.display = 'none';
+            document.getElementById('deleteSelectedBtn').style.display = 'none';
             return;
         }
 
@@ -347,12 +355,14 @@ $is_admin = ($_SESSION['user_role'] === 'admin');
 
                 const collapseId = `collapse-${a.id}`;
                 const headerId = `heading-${a.id}`;
+                const isChecked = selectedAulaIds.has(a.id);
                 
                 html += `
                     <div class="accordion-item border-0 lesson-card ${isUsed ? 'used' : (isCurrent ? 'current' : 'pending')}">
                         <h2 class="accordion-header" id="${headerId}">
                             <button class="accordion-button ${expandedAll ? '' : 'collapsed'}" type="button" data-bs-toggle="collapse" data-bs-target="#${collapseId}" aria-expanded="${expandedAll}" aria-controls="${collapseId}">
                                 <div class="d-flex align-items-center gap-2">
+                                    <input class="form-check-input aula-checkbox" type="checkbox" data-id="${a.id}" ${isChecked ? 'checked' : ''} style="margin-right: 8px;">
                                     <span class="badge ${isCurrent ? 'text-bg-primary' : (isUsed ? 'text-bg-success' : 'text-bg-warning')}">#${a.ordem}</span>
                                     <strong>${isCurrent ? '🎯 Próxima Aula' : (isUsed ? '✅ Aula Usada' : '📖 Aula Pendente')}</strong>
                                     ${isUsed ? `<span class="text-muted small">(${a.data_uso})</span>` : ''}
@@ -379,6 +389,46 @@ $is_admin = ($_SESSION['user_role'] === 'admin');
         });
 
         container.innerHTML = html;
+
+        // Show controls
+        document.getElementById('selectAllContainer').style.display = 'block';
+        document.getElementById('deleteSelectedBtn').style.display = 'block';
+
+        // Attach event listeners to checkboxes
+        attachCheckboxListeners();
+        updateSelectAllCheckbox();
+        updateDeleteButton();
+    }
+
+    function attachCheckboxListeners() {
+        document.querySelectorAll('.aula-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', (e) => {
+                const id = parseInt(e.target.dataset.id);
+                if (e.target.checked) {
+                    selectedAulaIds.add(id);
+                } else {
+                    selectedAulaIds.delete(id);
+                }
+                updateSelectAllCheckbox();
+                updateDeleteButton();
+            });
+        });
+    }
+
+    function updateSelectAllCheckbox() {
+        const selectAll = document.getElementById('selectAllAulas');
+        if (!selectAll) return;
+
+        const visibleCheckboxes = document.querySelectorAll('.aula-checkbox');
+        const allChecked = visibleCheckboxes.length > 0 && Array.from(visibleCheckboxes).every(cb => selectedAulaIds.has(parseInt(cb.dataset.id)));
+        selectAll.checked = allChecked;
+    }
+
+    function updateDeleteButton() {
+        const btn = document.getElementById('deleteSelectedBtn');
+        if (!btn) return;
+        btn.textContent = `🗑️ Excluir Selecionadas (${selectedAulaIds.size})`;
+        btn.disabled = selectedAulaIds.size === 0;
     }
 
     function renderFormTurmas() {
@@ -495,6 +545,44 @@ $is_admin = ($_SESSION['user_role'] === 'admin');
     document.getElementById('collapseAllBtn').addEventListener('click', () => {
         expandedAll = false;
         if (selectedTurma) renderLessonsForTurma(selectedTurma);
+    });
+
+    // Select All
+    document.getElementById('selectAllAulas').addEventListener('change', (e) => {
+        const isChecked = e.target.checked;
+        document.querySelectorAll('.aula-checkbox').forEach(checkbox => {
+            const id = parseInt(checkbox.dataset.id);
+            if (isChecked) {
+                selectedAulaIds.add(id);
+            } else {
+                selectedAulaIds.delete(id);
+            }
+            checkbox.checked = isChecked;
+        });
+        updateDeleteButton();
+    });
+
+    // Delete Selected
+    document.getElementById('deleteSelectedBtn').addEventListener('click', async () => {
+        if (selectedAulaIds.size === 0) return;
+        if (!confirm(`Deseja realmente excluir ${selectedAulaIds.size} aula(s)?`)) return;
+
+        try {
+            const res = await fetch(`${API}?action=delete_aulas`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: Array.from(selectedAulaIds) })
+            });
+            const data = await res.json();
+            if (data.success) {
+                selectedAulaIds.clear();
+                await loadData();
+            } else {
+                alert(data.error || 'Erro ao excluir aulas');
+            }
+        } catch (err) {
+            alert('Erro ao excluir aulas: ' + err.message);
+        }
     });
 
     // Importação em massa
