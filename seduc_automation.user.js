@@ -14,6 +14,8 @@
 
     const PROFESSOR_TOKEN = 'token_mestre_123'; 
     const API_BASE_URL = `https://api-seduc.myrandainformatica.com.br/registro.php`;
+    let ultimaChaveAula = null;
+    let ultimoSlotUsado = 0;
 
     function criarBotao() {
         if (document.getElementById('btn-automacao-fixo')) return;
@@ -42,10 +44,28 @@
             return;
         }
 
+        const chave = `${data}|||${turma}|||${disciplina}`;
+        if (ultimaChaveAula !== chave) {
+            ultimaChaveAula = chave;
+            ultimoSlotUsado = 0;
+        }
+
+        let slot = 1;
+        let modoPreenchimento = 'replace';
+        if (ultimoSlotUsado === 1) {
+            const ok = confirm('Deseja adicionar uma segunda aula aqui?');
+            if (!ok) return;
+            slot = 2;
+            modoPreenchimento = 'append';
+        } else if (ultimoSlotUsado >= 2) {
+            alert('Você já adicionou uma 2ª aula para este dia. Se quiser refazer, apague o texto e recarregue.');
+            return;
+        }
+
         this.innerHTML = '⌛ BUSCANDO...';
         GM_xmlhttpRequest({
             method: "GET",
-            url: `${API_BASE_URL}?data=${data}&turma=${encodeURIComponent(turma)}&disciplina=${encodeURIComponent(disciplina)}&token=${PROFESSOR_TOKEN}`,
+            url: `${API_BASE_URL}?data=${data}&turma=${encodeURIComponent(turma)}&disciplina=${encodeURIComponent(disciplina)}&slot=${slot}&token=${PROFESSOR_TOKEN}`,
             onload: (res) => {
                 try {
                     const json = JSON.parse(res.responseText);
@@ -54,10 +74,21 @@
                         if (ionTextarea) {
                             const textareaReal = ionTextarea.shadowRoot ? ionTextarea.shadowRoot.querySelector('textarea') : ionTextarea.querySelector('textarea');
                             if (textareaReal) {
-                                textareaReal.value = json.texto;
+                                const textoNovo = (json.texto ?? '').toString();
+                                if (modoPreenchimento === 'append') {
+                                    const atual = (textareaReal.value ?? '').toString();
+                                    const atualTrim = atual.trim();
+                                    const novoTrim = textoNovo.trim();
+                                    if (novoTrim.length > 0 && !atual.includes(novoTrim)) {
+                                        textareaReal.value = atualTrim.length > 0 ? `${atualTrim}\n\n${novoTrim}` : novoTrim;
+                                    }
+                                } else {
+                                    textareaReal.value = textoNovo;
+                                }
                                 textareaReal.dispatchEvent(new Event('input', { bubbles: true }));
                                 textareaReal.dispatchEvent(new Event('change', { bubbles: true }));
                                 ionTextarea.dispatchEvent(new Event('ionInput', { bubbles: true }));
+                                ultimoSlotUsado = slot;
                                 this.innerHTML = '✅ SUCESSO!';
                                 setTimeout(() => { this.innerHTML = '🚀 CARREGAR DADOS'; }, 2000);
                                 return;

@@ -12,6 +12,9 @@ $data = $_GET['data'] ?? '';
 $turma = $_GET['turma'] ?? '';
 $token = $_GET['token'] ?? '';
 $disciplina = $_GET['disciplina'] ?? '';
+$slot = (int)($_GET['slot'] ?? 1);
+
+if ($slot < 1) { $slot = 1; }
 
 if (empty($data) || empty($turma) || empty($token) || empty($disciplina)) {
     echo json_encode(['error' => 'Parâmetros incompletos (data, turma, disciplina ou token)']); exit;
@@ -28,9 +31,9 @@ if (!$prof) {
 
 $user_id = $prof['id'];
 
-// 2. Já existe aula para este dia, professor e DISCIPLINA?
-$stmt = $pdo->prepare("SELECT id, conteudo, ordem FROM aulas_planejadas WHERE usuario_id = ? AND data_uso = ? AND turma = ? AND disciplina = ?");
-$stmt->execute([$user_id, $data, $turma, $disciplina]);
+// 2. Já existe aula para este dia, professor, DISCIPLINA e SLOT?
+$stmt = $pdo->prepare("SELECT id, conteudo, ordem FROM aulas_planejadas WHERE usuario_id = ? AND data_uso = ? AND slot = ? AND turma = ? AND disciplina = ?");
+$stmt->execute([$user_id, $data, $slot, $turma, $disciplina]);
 $row = $stmt->fetch();
 
 if ($row) {
@@ -44,8 +47,8 @@ $stmt->execute([$user_id, $turma, $disciplina]);
 $proxima = $stmt->fetch();
 
 if ($proxima) {
-    $update = $pdo->prepare("UPDATE aulas_planejadas SET data_uso = ? WHERE id = ?");
-    $update->execute([$data, $proxima['id']]);
+    $update = $pdo->prepare("UPDATE aulas_planejadas SET data_uso = ?, slot = ? WHERE id = ?");
+    $update->execute([$data, $slot, $proxima['id']]);
     echo json_encode(['texto' => $proxima['conteudo'], 'ordem' => $proxima['ordem'], 'status' => 'nova_atribuida'], JSON_UNESCAPED_UNICODE);
 } else {
     echo json_encode(['error' => 'Nenhuma aula disponível na sequência para este professor, turma e disciplina.'], JSON_UNESCAPED_UNICODE);

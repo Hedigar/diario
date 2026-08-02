@@ -89,7 +89,7 @@ try {
             $aula = $stmt->fetch();
             if ($aula) {
                 // CORREÇÃO: Reseta data_uso apenas da mesma TURMA e DISCIPLINA
-                $stmt = $pdo->prepare("UPDATE aulas_planejadas SET data_uso = NULL WHERE usuario_id = ? AND turma = ? AND disciplina = ? AND ordem >= ?");
+                $stmt = $pdo->prepare("UPDATE aulas_planejadas SET data_uso = NULL, slot = 1 WHERE usuario_id = ? AND turma = ? AND disciplina = ? AND ordem >= ?");
                 $stmt->execute([$user_id, $aula['turma'], $aula['disciplina'], $aula['ordem']]);
             }
             echo json_encode(['success' => true]);
@@ -166,7 +166,7 @@ try {
             break;
 
         case 'reset_all':
-            $pdo->prepare("UPDATE aulas_planejadas SET data_uso = NULL WHERE usuario_id = ?")->execute([$user_id]);
+            $pdo->prepare("UPDATE aulas_planejadas SET data_uso = NULL, slot = 1 WHERE usuario_id = ?")->execute([$user_id]);
             echo json_encode(['success' => true]);
             break;
 

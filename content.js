@@ -48,6 +48,9 @@ function extrairData() {
  * Lógica de Automação
  */
 
+let ultimaChaveAula = null;
+let ultimoSlotUsado = 0;
+
 async function buscarEDirecionarAula() {
     const btn = document.getElementById('btn-automacao-fixo');
     const data = extrairData();
@@ -64,6 +67,24 @@ async function buscarEDirecionarAula() {
         return;
     }
 
+    const chave = `${data}|||${turma}|||${disciplina}`;
+    if (ultimaChaveAula !== chave) {
+        ultimaChaveAula = chave;
+        ultimoSlotUsado = 0;
+    }
+
+    let slot = 1;
+    let modoPreenchimento = 'replace';
+    if (ultimoSlotUsado === 1) {
+        const ok = confirm('Deseja adicionar uma segunda aula aqui?');
+        if (!ok) return;
+        slot = 2;
+        modoPreenchimento = 'append';
+    } else if (ultimoSlotUsado >= 2) {
+        alert('Você já adicionou uma 2ª aula para este dia. Se quiser refazer, apague o texto e recarregue.');
+        return;
+    }
+
     if (btn) btn.innerHTML = '⌛ BUSCANDO...';
 
     try {
@@ -73,14 +94,18 @@ async function buscarEDirecionarAula() {
             params: {
                 data: data,
                 turma: turma,
-                disciplina: disciplina
+                disciplina: disciplina,
+                slot: slot
             }
         });
 
         if (response.success) {
             const json = response.data;
             if (json.texto) {
-                preencherNoSistema(json.texto);
+                const ok = preencherNoSistema(json.texto, modoPreenchimento);
+                if (ok) {
+                    ultimoSlotUsado = slot;
+                }
                 if (btn) {
                     btn.innerHTML = '✅ SUCESSO!';
                     setTimeout(() => { btn.innerHTML = '🚀 CARREGAR DADOS'; }, 2000);
@@ -99,13 +124,23 @@ async function buscarEDirecionarAula() {
     }
 }
 
-function preencherNoSistema(texto) {
+function preencherNoSistema(texto, modo = 'replace') {
     const ionTextarea = document.querySelector('ion-textarea[placeholder="Descreva aqui as atividades do dia."]');
     if (ionTextarea) {
         // Lida com o Shadow DOM do Ionic
         const textareaReal = ionTextarea.shadowRoot ? ionTextarea.shadowRoot.querySelector('textarea') : ionTextarea.querySelector('textarea');
         if (textareaReal) {
-            textareaReal.value = texto;
+            const textoNovo = (texto ?? '').toString();
+            if (modo === 'append') {
+                const atual = (textareaReal.value ?? '').toString();
+                const atualTrim = atual.trim();
+                const novoTrim = textoNovo.trim();
+                if (novoTrim.length === 0) return true;
+                if (atual.includes(novoTrim)) return true;
+                textareaReal.value = atualTrim.length > 0 ? `${atualTrim}\n\n${novoTrim}` : novoTrim;
+            } else {
+                textareaReal.value = textoNovo;
+            }
             // Dispara todos os eventos que o Ionic/Angular esperam
             textareaReal.dispatchEvent(new Event('input', { bubbles: true }));
             textareaReal.dispatchEvent(new Event('change', { bubbles: true }));
